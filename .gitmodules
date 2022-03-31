@@ -1,0 +1,9 @@
+[submodule "libbpf"]
+	path = libbpf
+	url = https://github.com/libbpf/libbpf.git
+[submodule "scapy-scion-int"]
+	path = scapy-scion-int
+	url = https://github.com/lschulz/scapy-scion-int.git
+[submodule "ptf"]
+	path = ptf
+	url = https://github.com/p4lang/ptf.git

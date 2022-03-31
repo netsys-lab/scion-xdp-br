@@ -1,0 +1,6 @@
+self = "br1-ff00_0_1-4"
+topology = "gen/ASff00_0_1/topology.json"
+internal_interfaces = [
+    { ip = "10.2.0.5", port = 31008},
+    { ip = "10.2.0.6", port = 31008}
+]
