@@ -26,11 +26,16 @@ extern "C" {
 #include <chrono>
 #include <iomanip>
 #include <iostream>
+#include <random>
 
 
 static const struct aes_key key = {{ .w = {
     0x16157e2b, 0xa6d2ae28, 0x8815f7ab, 0x3c4fcf09
 }}};
+
+using std::uint64_t;
+std::random_device rng;
+std::uniform_int_distribution<uint64_t> dist;
 
 
 void benchmarkSoft(unsigned int n)
@@ -40,22 +45,22 @@ void benchmarkSoft(unsigned int n)
     struct aes_block subkeys[2] = {};
     aes_cmac_subkeys(&keySchedule, subkeys);
 
-    uint64_t message[2] = {};
+    uint64_t message[2] = { dist(rng), dist(rng) };
     struct aes_cmac mac = {};
+
+    auto t0 = std::chrono::high_resolution_clock::now();
     for (unsigned int i = 0; i < n; ++i)
     {
-        message[0] = message[1] = i;
-        auto t0 = std::chrono::high_resolution_clock::now();
         aes_cmac(
             reinterpret_cast<const uint8_t*>(message), sizeof(message),
             &keySchedule, subkeys, &mac);
-        auto t1 = std::chrono::high_resolution_clock::now();
-        auto delta = std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count();
-        std::cout << "0x";
-        for (unsigned int i = 0; i < 16; ++i)
-            std::cout << std::hex << std::setw(2) << std::setfill('0') << +mac.b[i];
-        std::cout << " " << std::dec << std::setw(8) << std::setfill(' ') << delta << '\n';
     }
+    auto t1 = std::chrono::high_resolution_clock::now();
+    auto delta = std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count();
+    std::cout << "0x";
+    for (unsigned int i = 0; i < 16; ++i)
+        std::cout << std::hex << std::setw(2) << std::setfill('0') << +mac.b[i];
+    std::cout << " " << std::dec << std::setw(8) << std::setfill(' ') << (double)delta / n << '\n';
 }
 
 void benchmarkHard(unsigned int n)
@@ -66,22 +71,22 @@ void benchmarkHard(unsigned int n)
     __m128i subkeys[2] = {};
     aes_cmac_subkeys_128(keySchedule, subkeys);
 
-    uint64_t message[2] = {};
+    uint64_t message[2] = { dist(rng), dist(rng) };
     struct aes_cmac mac = {};
+
+    auto t0 = std::chrono::high_resolution_clock::now();
     for (unsigned int i = 0; i < n; ++i)
     {
-        message[0] = message[1] = i;
-        auto t0 = std::chrono::high_resolution_clock::now();
         aes_cmac_unaligned128(
             reinterpret_cast<const uint8_t*>(message), sizeof(message),
             keySchedule, subkeys, &mac);
-        auto t1 = std::chrono::high_resolution_clock::now();
-        auto delta = std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count();
-        std::cout << "0x";
-        for (unsigned int i = 0; i < 16; ++i)
-            std::cout << std::hex << std::setw(2) << std::setfill('0') << +mac.b[i];
-        std::cout << " " << std::dec << std::setw(8) << std::setfill(' ') << delta << '\n';
     }
+    auto t1 = std::chrono::high_resolution_clock::now();
+    auto delta = std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count();
+    std::cout << "0x";
+    for (unsigned int i = 0; i < 16; ++i)
+        std::cout << std::hex << std::setw(2) << std::setfill('0') << +mac.b[i];
+    std::cout << " " << std::dec << std::setw(8) << std::setfill(' ') << (double)delta / n << '\n';
 }
 
 int main(int argc, char* argv[])
@@ -89,10 +94,10 @@ int main(int argc, char* argv[])
     std::cout << "AES CPU Benchmark\n";
 
     std::cout << "Software\n";
-    benchmarkSoft(10);
+    benchmarkSoft(100000);
 
     std::cout << "With Hardware Support\n";
-    benchmarkHard(10);
+    benchmarkHard(100000);
 
     return 0;
 }

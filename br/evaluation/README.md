@@ -20,6 +20,8 @@ received packets and drops them.
 - [count_and_drop.py](./count_and_drop.py) BCC Python script for dropping packets in XDP.
   Prints the number of packets dropped per second for each CPU.
 
+Running this evaluation requires Scapy, tcpreplay, and [BCC](https://github.com/iovisor/bcc).
+
 XDP SCION Forwarding
 --------------------
 The following commands were used to test the XDP BR:
@@ -82,8 +84,6 @@ Packet size: 138 bytes
 | XDP border router with AES    | 0.676 Mpps |        ~1.48 µs |
 
 Is is interesting to look at the difference in processing time between the border router with AES
-support and without AES (and therefore no hop field validation). From the values above, it appears
-the cost of the hop field validation is 1.48&nbsp;µs - 1.12&nbsp;µs = 0.36&nbsp;µs. However,
-360&nbsp;ns seem unrealistic for encrypting a 16 byte AES block without hardware support, although
-the fact that all verified hop fields are exactly the same might contribute to a higher than
-expected performance.
+support and without AES (and therefore no hop field validation). From the values above, the cost of
+hop field validation can be computed as 1.48&nbsp;µs - 1.12&nbsp;µs = 0.36&nbsp;µs which is about
+twice the runtime of our AES subroutine when compiled for native execution in userspace.
