@@ -71,7 +71,7 @@ struct {
     __uint(type, BPF_MAP_TYPE_DEVMAP);
     __uint(key_size, sizeof(u32));
     __uint(value_size, sizeof(u32));
-    __uint(max_entries, 16);
+    __uint(max_entries, 128);
 } tx_port_map SEC(".maps");
 
 /// \brief Packet and byte counters per port, CPU, and verdict.

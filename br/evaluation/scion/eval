@@ -1,0 +1,148 @@
+#!/bin/bash
+# Copyright (c) 2022 Lars-Christian Schulz
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+PROJECT_DIR=$(readlink -f "$SCRIPT_DIR/../../..")
+
+DOCKER_IMAGE=scion_host:latest
+COMPOSE_FILE=${SCRIPT_DIR}/docker-compose.yaml
+COMPOSE_PROJECT=br-eval
+
+# Export paths so they are visible in the compose file
+export BUILD_DIR=${PROJECT_DIR}/build
+export BR_CONFIG=${SCRIPT_DIR}/br_config
+export SCION_ROOT=${HOME}/scion
+export SCION_APPS=${HOME}/scion-apps
+
+. ${PROJECT_DIR}/scion/helper.bash
+
+##############
+## Commands ##
+##############
+
+cmd_build() {
+    # Build docker image
+    docker build --build-arg SCION_UID=$(id -u $LOGNAME) --build-arg SCION_GID=$(id -g $LOGNAME) \
+    -t ${DOCKER_IMAGE} ${PROJECT_DIR}/scion/scion_host
+}
+
+cmd_run() {
+    # Interfaces
+    ETH0=$1
+    ETH1=$2
+    ETH2=$3
+    ETH3=$4
+
+    if [[ "$(docker images -q ${DOCKER_IMAGE} 2> /dev/null)" == "" ]]; then
+        cmd_build
+    fi
+
+    set -e
+    sudo -v
+
+    # Create local topology
+    pushd $SCION_ROOT
+    ./scion.sh bazel_remote
+    ./scion.sh topology -c "$SCRIPT_DIR/topo.yaml"
+    popd
+
+    rm -f "$SCION_ROOT/gen/links_established"
+
+    # Rewrite BR interface IPs
+    set_br_internal_addr 1-ff00:0:1 br1-ff00_0_1-1 127.0.0.1:31004
+    set_br_internal_addr 1-ff00:0:2 br1-ff00_0_2-1 127.0.0.1:31010
+    set_br_internal_addr 1-ff00:0:3 br1-ff00_0_3-1 127.0.0.1:31016
+    set_link_underlay 1-ff00:0:1 10.1.0.0:50000 1-ff00:0:2 10.1.0.1:50000
+    set_link_underlay 1-ff00:0:2 10.1.0.3:50000 1-ff00:0:3 10.1.0.2:50000
+
+    # For convenience: Set scion daemon address to default value
+    for i in {1..3}
+    do
+        set_scion_daemon_address ASff00_0_$i 127.0.0.1:30255
+    done
+
+    # Run topology using docker-compose
+    rm -f "$SCION_ROOT/logs/*"
+    docker-compose -f "$COMPOSE_FILE" -p $COMPOSE_PROJECT up -d
+
+    # Mount network namespaces of the containers
+    for i in {1..3}
+    do
+        mount_netns as$i
+    done
+
+    # Move interfaces into containers
+    sudo ip link set $ETH0 netns as1
+    sudo ip link set $ETH1 netns as2
+    sudo ip link set $ETH3 netns as2
+    sudo ip link set $ETH2 netns as3
+
+    # Configure IP addresses
+    sudo ip netns exec as1 ip addr add dev $ETH0 10.1.0.0/31
+    sudo ip netns exec as2 ip addr add dev $ETH1 10.1.0.1/31
+    sudo ip netns exec as2 ip addr add dev $ETH3 10.1.0.3/31
+    sudo ip netns exec as3 ip addr add dev $ETH2 10.1.0.2/31
+
+    sudo ip netns exec as1 ip link set dev $ETH0 up
+    sudo ip netns exec as2 ip link set dev $ETH1 up
+    sudo ip netns exec as2 ip link set dev $ETH3 up
+    sudo ip netns exec as3 ip link set dev $ETH2 up
+
+    # Signal containers to start SCION
+    echo '1' > "$SCION_ROOT/gen/links_established"
+}
+
+cmd_stop() {
+    # Delete Docker containers and networks
+    docker-compose -f "$COMPOSE_FILE" -p $COMPOSE_PROJECT down
+
+    for i in {1..3}
+    do
+        umount_netns as$i
+    done
+}
+
+cmd_logs() {
+    docker-compose logs
+}
+
+cmd_enter() {
+    docker exec -it $1 bash -l
+}
+
+cmd_clean() {
+    rm -rf $SCION_ROOT/gen* $SCION_ROOT/logs $SCION_ROOT/traces
+    # Delete pinned maps
+    sudo rm -rf /sys/fs/bpf/br1-ff00_0_1-1
+}
+
+#################
+## Entry point ##
+#################
+
+COMMAND=$1
+shift
+
+case "$COMMAND" in
+    build|run|stop|logs|enter|clean)
+        "cmd_$COMMAND" "$@" ;;
+    *) echo "Command no recognized"; exit 1 ;;
+esac

@@ -19,12 +19,16 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+PROJECT_DIR=$(readlink -f "$SCRIPT_DIR/..")
+
 DOCKER_IMAGE=scion_host:latest
-COMPOSE_ARGS="-f docker-compose-star.yaml -p int-demo"
+COMPOSE_FILE=$SCRIPT_DIR/docker-compose-star.yaml
+COMPOSE_PROJECT=xdp-br
 
 # Export paths so they are visible in the compose file
 export TOPO_DIR=${PWD}
-export BUILD_DIR=../build
+export BUILD_DIR=${PROJECT_DIR}/build
 export SCION_ROOT=${HOME}/scion
 export SCION_APPS=${HOME}/scion-apps
 
@@ -152,13 +156,12 @@ cmd_run() {
     sudo -v
 
     # Create local topology
-    local SCRIPT_DIR=$PWD
     pushd $SCION_ROOT
     ./scion.sh bazel_remote
-    ./scion.sh topology -c $SCRIPT_DIR/topologies/star.yaml
+    ./scion.sh topology -c "$SCRIPT_DIR/topologies/star.yaml"
     popd
 
-    rm -f $SCION_ROOT/gen/links_established
+    rm -f "$SCION_ROOT/gen/links_established"
 
     # Rewrite AS ff00:0:1 internal network IPs
     set_control_addr 1-ff00:0:1 10.2.0.0:31000
@@ -182,7 +185,7 @@ cmd_run() {
     done
 
     # Split ASff00:0:1 into four program groups
-    ed ${SCION_ROOT}/gen/supervisord.conf << EOF
+    ed "${SCION_ROOT}/gen/supervisord.conf" << EOF
 /^\[group:as1-ff00_0_1]/
 .,+1d
 i
@@ -203,8 +206,8 @@ q
 EOF
 
     # Run topology using docker-compose
-    rm -f $SCION_ROOT/logs/*
-    docker-compose $COMPOSE_ARGS up -d
+    rm -f "$SCION_ROOT/logs/*"
+    docker-compose -f "$COMPOSE_FILE" -p $COMPOSE_PROJECT up -d
 
     # Mount network namespaces of the containers
     for i in {1..4}
@@ -236,7 +239,7 @@ EOF
     set_as1_routes
 
     # Signal containers to start SCION
-    echo '1' > $SCION_ROOT/gen/links_established
+    echo '1' > "$SCION_ROOT/gen/links_established"
 }
 
 cmd_stop() {
@@ -244,9 +247,8 @@ cmd_stop() {
     cmd_detach_xdp
 
     # Delete Docker containers and networks
-    docker-compose $COMPOSE_ARGS down
+    docker-compose -f "$COMPOSE_FILE" -p $COMPOSE_PROJECT down
 
-    # Delete links to simple_switch
     for i in {1..4}
     do
         umount_netns as1br$i

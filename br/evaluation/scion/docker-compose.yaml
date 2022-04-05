@@ -1,0 +1,54 @@
+version: '3.6'
+
+services:
+  as1:
+    image: scion_host:latest
+    container_name: as1
+    environment:
+      - SUPERVISOR_PROCESS_GROUP=as1-ff00_0_1
+    volumes:
+      - ${SCION_ROOT:?}/bin:/home/scion/scion/bin:ro
+      - ${SCION_APPS:?}/bin:/home/scion/scion-apps/bin:ro
+      - ${SCION_ROOT:?}/gen:/home/scion/scion/gen:ro
+      - ${SCION_ROOT:?}/gen-cache:/home/scion/scion/gen-cache
+      - ${SCION_ROOT:?}/gen-certs:/home/scion/scion/gen-certs
+      - ${SCION_ROOT:?}/logs:/home/scion/scion/logs
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+  as2:
+    image: scion_host:latest
+    container_name: as2
+    environment:
+      - SUPERVISOR_PROCESS_GROUP=as1-ff00_0_2
+    volumes:
+      - ${SCION_ROOT:?}/bin:/home/scion/scion/bin:ro
+      - ${SCION_APPS:?}/bin:/home/scion/scion-apps/bin:ro
+      - ${SCION_ROOT:?}/gen:/home/scion/scion/gen:ro
+      - ${SCION_ROOT:?}/gen-cache:/home/scion/scion/gen-cache
+      - ${SCION_ROOT:?}/gen-certs:/home/scion/scion/gen-certs
+      - ${SCION_ROOT:?}/logs:/home/scion/scion/logs
+      - ${BUILD_DIR:?}:/home/scion/bpf:ro
+      - ${BR_CONFIG:?}:/home/scion/br_config:ro
+      - /usr/local/lib/libboost_json.so.1.78.0:/usr/local/lib/libboost_json.so.1.78.0:ro
+      - /usr/local/lib/libboost_container.so.1.78.0:/usr/local/lib/libboost_container.so.1.78.0:ro
+      - /sys/fs/bpf:/sys/fs/bpf # required to pin BPF maps from inside the container
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    privileged: true # required to load BPF programs from inside the container
+  as3:
+    image: scion_host:latest
+    container_name: as3
+    environment:
+      - SUPERVISOR_PROCESS_GROUP=as1-ff00_0_3
+    volumes:
+      - ${SCION_ROOT:?}/bin:/home/scion/scion/bin:ro
+      - ${SCION_APPS:?}/bin:/home/scion/scion-apps/bin:ro
+      - ${SCION_ROOT:?}/gen:/home/scion/scion/gen:ro
+      - ${SCION_ROOT:?}/gen-cache:/home/scion/scion/gen-cache
+      - ${SCION_ROOT:?}/gen-certs:/home/scion/scion/gen-certs
+      - ${SCION_ROOT:?}/logs:/home/scion/scion/logs
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
