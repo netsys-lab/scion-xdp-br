@@ -48,5 +48,5 @@ add_custom_command(
     OUTPUT xdp_aes.o
     COMMAND ${BPFTOOL} gen object xdp_aes.o "$<TARGET_OBJECTS:xdp_aes_objs>"
     COMMAND_EXPAND_LISTS
-    DEPENDS src/bpf/xdp_aes.c src/aes.c
+    DEPENDS "$<TARGET_OBJECTS:xdp_aes_objs>"
 )

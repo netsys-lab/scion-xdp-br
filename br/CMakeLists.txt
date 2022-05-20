@@ -42,7 +42,7 @@ add_custom_command(
     OUTPUT xdp_br.o
     COMMAND ${BPFTOOL} gen object xdp_br.o "$<TARGET_OBJECTS:xdp_br_objs>"
     COMMAND_EXPAND_LISTS
-    DEPENDS src/bpf/xdp.c;${CMAKE_SOURCE_DIR}/aes/src/aes.c
+    DEPENDS "$<TARGET_OBJECTS:xdp_br_objs>"
 )
 
 # Configure optional features
@@ -77,5 +77,5 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_OBJECTS:xdp_pass_objs>"
     ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND_EXPAND_LISTS
-    DEPENDS src/bpf/xdp_pass.c
+    DEPENDS "$<TARGET_OBJECTS:xdp_pass_objs>"
 )
