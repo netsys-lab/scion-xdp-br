@@ -50,7 +50,7 @@ struct ExternalIface
 struct SiblingIface
 {
     std::uint32_t scionIfId; ///< SCION interface id
-    UdpEp destBr;            ///< Underlay connection to sibling
+    UdpEp sibling;           ///< Underlay connection to sibling
 };
 
 /// \brief Describes an internal interface, i.e., an interface to the internal network.

@@ -125,7 +125,6 @@ inline bool scion_as_egress(struct scratchpad *this, struct headers *hdr, u32 as
 
     // If segment_switch is one, we need to work with the second segment identifier.
     u32 seg_switch = this->path.scion.segment_switch;
-    if (seg_switch > 1) return false;
 
     // If we have switched from one segment to another at the end of ingress processing,
     // we must use and update the new current hop field during egress processing.
@@ -136,14 +135,16 @@ inline bool scion_as_egress(struct scratchpad *this, struct headers *hdr, u32 as
         if ((void*)(inf + 1) > data_end) return false;
     }
 
-    u16 beta = ntohs(this->path.scion.seg_id[seg_switch]);
+    u16 *seg_id_ptr = this->path.scion.seg_id;
+    if (seg_switch) seg_id_ptr = this->path.scion.seg_id + 1;
+    u16 beta = ntohs(*seg_id_ptr);
     if (as_ing_ifid == INTERNAL_IFACE) // avoid checking the same hop field twice
         defer_verify_hop_field(this, 1, hdr->scion_path.inf, hdr->scion_path.hf, htons(beta));
     if (INF_GET_CONS(inf))
     {
         struct hopfield *hf = hdr->scion_path.hf;
         u16 seg_id = beta ^ ((u16)hf->mac[1] | ((u16)hf->mac[0] << 8));
-        this->path.scion.seg_id[seg_switch] = htons(seg_id);
+        *seg_id_ptr = htons(seg_id);
     }
     ++this->path.scion.curr_hf;
 

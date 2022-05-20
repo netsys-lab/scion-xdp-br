@@ -32,6 +32,7 @@ extern "C" {
 #include <boost/asio/ip/address.hpp>
 
 #include <algorithm>
+#include <cassert>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
@@ -60,7 +61,7 @@ void storeIPv4(const boost::asio::ip::address_v4 &ip, uint8_t *__restrict__ dst)
 void storeIPv6(const boost::asio::ip::address_v6 &ip, uint8_t *__restrict__ dst)
 {
     auto bytes = ip.to_bytes();
-    std::copy(bytes.rbegin(), bytes.rend(), dst);
+    std::copy(bytes.begin(), bytes.end(), dst);
 }
 #endif
 
@@ -112,22 +113,25 @@ void populateEgressMap(Bpf::Map &egressMap, const BrConfig &config)
     for (const auto &iface : config.ifs.external)
     {
         struct fwd_info fwd = {
-            .as_egress = true,
-            .redirect = {
-                .dst_port = htons(iface.remote.port),
-                .src_port = htons(iface.local.port)
+            .fwd_external = true,
+            .link = {
+                .remote_port = htons(iface.remote.port),
+                .local_port = htons(iface.local.port)
             }
         };
-        // Source addresses
+        assert(iface.local.ip.is_v4() == iface.remote.ip.is_v4());
         if (iface.local.ip.is_v4())
-            STORE_IPV4(iface.local.ip.to_v4(), &fwd.redirect.ipv4.src);
+        {
+            fwd.link.ip_family = AF_INET;
+            STORE_IPV4(iface.local.ip.to_v4(), &fwd.link.ipv4.local);
+            STORE_IPV4(iface.remote.ip.to_v4(), &fwd.link.ipv4.remote);
+        }
         else
-            STORE_IPV6(iface.local.ip.to_v6(), &fwd.redirect.ipv6.src);
-        // Destination addresses
-        if (iface.remote.ip.is_v4())
-            STORE_IPV4(iface.remote.ip.to_v4(), &fwd.redirect.ipv4.dst);
-        else
-            STORE_IPV6(iface.remote.ip.to_v6(), &fwd.redirect.ipv6.dst);
+        {
+            fwd.link.ip_family = AF_INET6;
+            STORE_IPV6(iface.local.ip.to_v6(), &fwd.link.ipv6.local);
+            STORE_IPV6(iface.remote.ip.to_v6(), &fwd.link.ipv6.remote);
+        }
 
         uint32_t key = iface.scionIfId;
         egressMap.update(&key, sizeof(key), &fwd, sizeof(fwd), 0);
@@ -137,13 +141,19 @@ void populateEgressMap(Bpf::Map &egressMap, const BrConfig &config)
     for (const auto &iface : config.ifs.sibling)
     {
         struct fwd_info fwd = {
-            .as_egress = false,
-            .egress_br = { .port = htons(iface.destBr.port) }
+            .fwd_external = false,
+            .sibling = { .port = htons(iface.sibling.port) }
         };
-        if (iface.destBr.ip.is_v4())
-            STORE_IPV4(iface.destBr.ip.to_v4(), &fwd.egress_br.ipv4);
+        if (iface.sibling.ip.is_v4())
+        {
+            fwd.sibling.ip_family = AF_INET;
+            STORE_IPV4(iface.sibling.ip.to_v4(), &fwd.sibling.ipv4);
+        }
         else
-            STORE_IPV6(iface.destBr.ip.to_v6(), &fwd.egress_br.ipv6);
+        {
+            fwd.sibling.ip_family = AF_INET6;
+            STORE_IPV6(iface.sibling.ip.to_v6(), &fwd.sibling.ipv6);
+        }
 
         uint32_t key = iface.scionIfId;
         egressMap.update(&key, sizeof(key), &fwd, sizeof(fwd), 0);
@@ -155,13 +165,19 @@ void populateIntIfMap(Bpf::Map &intIfMap, const BrConfig &config)
     for (const auto &iface : config.ifs.internal)
     {
         if (iface.ifname.empty()) continue;
-        struct interface intIf = {
+        struct int_iface intIf = {
             .port = htons(iface.local.port)
         };
         if (iface.local.ip.is_v4())
+        {
+            intIf.ip_family = AF_INET;
             STORE_IPV4(iface.local.ip.to_v4(), &intIf.ipv4);
+        }
         else
+        {
+            intIf.ip_family = AF_INET6;
             STORE_IPV6(iface.local.ip.to_v6(), &intIf.ipv6);
+        }
         auto ifindex = static_cast<uint32_t>(ifNameToIndex(iface.ifname.c_str()));
         intIfMap.update(&ifindex, sizeof(ifindex), &intIf, sizeof(intIf), 0);
     }

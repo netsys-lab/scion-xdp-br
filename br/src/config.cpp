@@ -105,21 +105,28 @@ void parseTopology(const boost::json::value &topo, const std::string &self, BrIn
             for (const auto &iface : ifaces)
             {
                 auto underlay = iface.value().as_object().at("underlay").as_object();
-                brIf.external.emplace_back(ExternalIface{
-                    .scionIfId = boost::lexical_cast<std::uint32_t>(iface.key()),
-                    .local = parseUdpEp(underlay.at("public").as_string()),
-                    .remote = parseUdpEp(underlay.at("remote").as_string())
-                });
+                auto scionIfId = boost::lexical_cast<std::uint32_t>(iface.key());
+                auto local = parseUdpEp(underlay.at("public").as_string());
+                auto remote = parseUdpEp(underlay.at("remote").as_string());
+
+                if (local.ip.is_v4() != remote.ip.is_v4())
+                {
+                    throw std::invalid_argument(
+                        "Local and remote addresses of a SCION link must be of the same IP version."
+                    );
+                }
+
+                brIf.external.emplace_back(ExternalIface{ scionIfId, "", local, remote });
             }
         }
         else
         {
-            auto destBr = parseUdpEp(br.value().as_object().at("internal_addr").as_string());
+            auto sibling = parseUdpEp(br.value().as_object().at("internal_addr").as_string());
             for (const auto &iface : ifaces)
             {
                 brIf.sibling.emplace_back(SiblingIface{
                     .scionIfId = boost::lexical_cast<std::uint32_t>(iface.key()),
-                    .destBr = destBr
+                    .sibling = sibling
                 });
             }
         }
@@ -308,7 +315,7 @@ std::ostream& operator<<(std::ostream &stream, const BrInterfaces &brIf)
     for (const SiblingIface &iface : brIf.sibling)
     {
         stream << std::setw(5) << iface.scionIfId;
-        stream << " route to " << iface.destBr << '\n';
+        stream << " route to " << iface.sibling << '\n';
     }
     stream << "Internal interfaces:\n";
     for (const InternalIface &iface : brIf.internal)

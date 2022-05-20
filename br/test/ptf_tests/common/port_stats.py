@@ -6,13 +6,6 @@ from typing import List, Optional
 from libbpf import bpf, map
 
 
-class _port_stats(Structure):
-    _fields_ = [
-        ("verdict_bytes", c_uint64 * 10),
-        ("verdict_packets", c_uint64 * 10)
-    ]
-
-
 class Counter(enum.IntEnum):
     UNDEFINED = 0
     SCION_FORWARD = 1
@@ -20,10 +13,18 @@ class Counter(enum.IntEnum):
     NOT_SCION = 3
     NOT_IMPLEMENTED = 4
     NO_INTERFACE = 5
-    ROUTER_ALERT = 6
-    FIB_LKUP_DROP = 7
-    FIB_LKUP_PASS = 8
-    INVALID_HF = 9
+    UNDERLAY_MISMATCH = 6
+    ROUTER_ALERT = 7
+    FIB_LKUP_DROP = 8
+    FIB_LKUP_PASS = 9
+    INVALID_HF = 10
+
+
+class _port_stats(Structure):
+    _fields_ = [
+        ("verdict_bytes", c_uint64 * len(Counter)),
+        ("verdict_packets", c_uint64 * len(Counter))
+    ]
 
 
 class PortStatsMap:

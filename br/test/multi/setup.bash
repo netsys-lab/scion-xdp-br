@@ -40,11 +40,17 @@ sudo ip netns exec sw2 ip link set dev veth15 addr 02:00:00:00:00:0F
 
 # Configure host interfaces in global namespace
 sudo ip addr add dev veth0 10.1.1.1/24
+sudo ip addr add dev veth0 fd00:f00d:cafe:1::1/64
 sudo ip addr add dev veth2 10.1.2.1/24
+sudo ip addr add dev veth2 fd00:f00d:cafe:2::1/64
 sudo ip addr add dev veth8 10.1.3.1/24
+sudo ip addr add dev veth8 fd00:f00d:cafe:3::1/64
 sudo ip addr add dev veth10 10.1.4.1/24
+sudo ip addr add dev veth10 fd00:f00d:cafe:4::1/64
 sudo ip addr add dev veth12 10.1.5.1/24
+sudo ip addr add dev veth12 fd00:f00d:cafe:5::1/64
 sudo ip addr add dev veth14 10.1.6.1/24
+sudo ip addr add dev veth14 fd00:f00d:cafe:6::1/64
 sudo ip link set dev veth0 up
 sudo ip link set dev veth2 up
 sudo ip link set dev veth8 up
@@ -63,23 +69,33 @@ sudo make -C xdp_pass attach VETH=veth14 > /dev/null
 
 # Bring interface on switch side up
 sudo ip netns exec sw0 ip addr add dev veth1 10.1.1.2/24
+sudo ip netns exec sw0 ip addr add dev veth1 fd00:f00d:cafe:1::2/64
 sudo ip netns exec sw0 ip addr add dev veth3 10.1.2.2/24
+sudo ip netns exec sw0 ip addr add dev veth3 fd00:f00d:cafe:2::2/64
 sudo ip netns exec sw0 ip link set dev veth1 up
 sudo ip netns exec sw0 ip link set dev veth3 up
 sudo ip netns exec sw1 ip addr add dev veth9 10.1.3.2/24
+sudo ip netns exec sw1 ip addr add dev veth9 fd00:f00d:cafe:3::2/64
 sudo ip netns exec sw1 ip addr add dev veth11 10.1.4.2/24
+sudo ip netns exec sw1 ip addr add dev veth11 fd00:f00d:cafe:4::2/64
 sudo ip netns exec sw1 ip link set dev veth9 up
 sudo ip netns exec sw1 ip link set dev veth11 up
 sudo ip netns exec sw2 ip addr add dev veth13 10.1.5.2/24
+sudo ip netns exec sw2 ip addr add dev veth13 fd00:f00d:cafe:5::2/64
 sudo ip netns exec sw2 ip addr add dev veth15 10.1.6.2/24
+sudo ip netns exec sw2 ip addr add dev veth15 fd00:f00d:cafe:6::2/64
 sudo ip netns exec sw2 ip link set dev veth13 up
 sudo ip netns exec sw2 ip link set dev veth15 up
 
 # Configure links between switches
 sudo ip netns exec sw1 ip addr add dev veth4 10.2.0.0/31
+sudo ip netns exec sw1 ip addr add dev veth4 fd00:f00d:cafe:0::0/127
 sudo ip netns exec sw0 ip addr add dev veth5 10.2.0.1/31
+sudo ip netns exec sw0 ip addr add dev veth5 fd00:f00d:cafe:0::1/127
 sudo ip netns exec sw2 ip addr add dev veth6 10.2.0.2/31
+sudo ip netns exec sw2 ip addr add dev veth6 fd00:f00d:cafe:0::2/127
 sudo ip netns exec sw0 ip addr add dev veth7 10.2.0.3/31
+sudo ip netns exec sw0 ip addr add dev veth7 fd00:f00d:cafe:0::3/127
 sudo ip netns exec sw1 ip link set dev veth4 up
 sudo ip netns exec sw0 ip link set dev veth5 up
 sudo ip netns exec sw2 ip link set dev veth6 up
@@ -87,8 +103,14 @@ sudo ip netns exec sw0 ip link set dev veth7 up
 
 # Configure AS internal routing
 sudo ip netns exec sw0 sysctl -w net.ipv4.ip_forward=1 > /dev/null
+sudo ip netns exec sw0 sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/null
+# It appears IPv6 forwarding must be enabled in all namespaces.
+sudo ip netns exec sw1 sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/null
+sudo ip netns exec sw2 sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/null
 sudo ip netns exec sw1 ip route add 10.2.0.2/31 via 10.2.0.1 dev veth4
 sudo ip netns exec sw2 ip route add 10.2.0.0/31 via 10.2.0.3 dev veth6
+sudo ip netns exec sw1 ip route add fd00:f00d:cafe:0::2/127 via fd00:f00d:cafe:0::1 dev veth4
+sudo ip netns exec sw2 ip route add fd00:f00d:cafe:0::0/127 via fd00:f00d:cafe:0::3 dev veth6
 
 # Disable checksum offload
 sudo ethtool --offload veth0 rx off tx off > /dev/null
@@ -117,3 +139,13 @@ sudo ip netns exec sw1 ping -c 1 10.1.3.1
 sudo ip netns exec sw1 ping -c 1 10.1.4.1
 sudo ip netns exec sw2 ping -c 1 10.1.5.1
 sudo ip netns exec sw2 ping -c 1 10.1.6.1
+
+sleep 2 # IPv6 needs some time
+sudo ip netns exec sw0 ping -c 1 fd00:f00d:cafe:1::1
+sudo ip netns exec sw0 ping -c 1 fd00:f00d:cafe:2::1
+sudo ip netns exec sw0 ping -c 1 fd00:f00d:cafe:0::0
+sudo ip netns exec sw0 ping -c 1 fd00:f00d:cafe:0::2
+sudo ip netns exec sw1 ping -c 1 fd00:f00d:cafe:3::1
+sudo ip netns exec sw1 ping -c 1 fd00:f00d:cafe:4::1
+sudo ip netns exec sw2 ping -c 1 fd00:f00d:cafe:5::1
+sudo ip netns exec sw2 ping -c 1 fd00:f00d:cafe:6::1

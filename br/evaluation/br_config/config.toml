@@ -1,5 +1,6 @@
 self = "br1-ff00_0_1-2"
 topology = "br_config/topology.json"
+endhost_port = 30041
 internal_interfaces = [
     {ip = "127.0.0.1", port = 31002}
 ]

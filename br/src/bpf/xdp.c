@@ -140,8 +140,7 @@ int process_packet(struct xdp_md* ctx, struct scratchpad *this)
         ingress.ipv4 = this->ip.v4.dst;
 #endif
 #ifdef ENABLE_IPV6
-        memcpy(ingress.ipv6, &this->ip.v6.dst, 16);
-        memcpy(this->fib_lookup.ipv6_dst, &this->hdr.ip.v6->daddr, 16);
+        memcpy(ingress.ipv6, &this->ip.v6.dst, sizeof(ingress.ipv6));
 #endif
         u32 *ifid = bpf_map_lookup_elem(&ingress_map, &ingress);
         if (!ifid) return record_verdict(ctx, VERDICT_NO_INTERFACE);
@@ -200,7 +199,7 @@ int process_packet(struct xdp_md* ctx, struct scratchpad *this)
 
     int egress_ifindex = -1;
     init_fib_lookup(this, &hdr, ctx);
-    if (fwd->as_egress)
+    if (fwd->fwd_external)
     {
         // Forward to next AS on path
         switch (this->path_type)
@@ -214,19 +213,23 @@ int process_packet(struct xdp_md* ctx, struct scratchpad *this)
         default:
             break;
         }
-        egress_ifindex = fib_lookup_as_egress(this, ctx, fwd);
+        if (fwd->link.ip_family != this->ip.family)
+            return record_verdict(ctx, VERDICT_UNDERLAY_MISMATCH);
+        egress_ifindex = fib_lookup_as_egress(this, ctx, &fwd->link);
     }
     else
     {
         if (as_ing_ifid != INTERNAL_IFACE)
         {
             // Forward packet from another AS to another border router in our AS
-            egress_ifindex = fib_lookup_egress_br(this, ctx, fwd);
+            if (fwd->sibling.ip_family != this->ip.family)
+                return record_verdict(ctx, VERDICT_UNDERLAY_MISMATCH);
+            egress_ifindex = fib_lookup_egress_br(this, ctx, &fwd->sibling);
         }
         else
         {
             // Forward a SCION packet between other (border) routers in our AS
-            egress_ifindex = fib_lookup_ip_forward(this, &hdr, ctx, fwd);
+            egress_ifindex = fib_lookup_ip_forward(this, &hdr, ctx);
         }
     }
     if (egress_ifindex < 0)

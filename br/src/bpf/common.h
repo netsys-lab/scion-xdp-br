@@ -29,6 +29,7 @@
 
 #ifdef __INTELLISENSE__
 #define ENABLE_IPV4
+#define ENABLE_IPV6
 #define ENABLE_SCION_PATH
 #define ENABLE_HF_CHECK
 #endif
@@ -37,35 +38,38 @@
 #define MAKE_VERDICT(action, reason) ((action & 0x07) | (reason << 3))
 
 enum counter {
-    COUNTER_UNDEFINED,
-    COUNTER_SCION_FORWARD,
-    COUNTER_PARSE_ERROR,
-    COUNTER_NOT_SCION,
-    COUNTER_NOT_IMPLEMENTED,
-    COUNTER_NO_INTERFACE,
-    COUNTER_ROUTER_ALERT,
-    COUNTER_FIB_LKUP_DROP,
-    COUNTER_FIN_LKUP_PASS,
-    COUNTER_INVALID_HF,
-    COUNTER_ENUM_COUNT, // always last
+    COUNTER_UNDEFINED,         ///< Unknown packet status
+    COUNTER_SCION_FORWARD,     ///< Packet was forwarded by XDP
+    COUNTER_PARSE_ERROR,       ///< Could not parse packet as valid SCION
+    COUNTER_NOT_SCION,         ///< Packet is not UDP with SCION overlay
+    COUNTER_NOT_IMPLEMENTED,   ///< Unsupported SCION header type
+    COUNTER_NO_INTERFACE,      ///< Cannot match SCION packet to BR interface
+    COUNTER_UNDERLAY_MISMATCH, ///< Translation between IPv4 and IPv6 underlay needed
+    COUNTER_ROUTER_ALERT,      ///< Router alert flag is set
+    COUNTER_FIB_LKUP_DROP,     ///< FIB lookup failed, dropping packet
+    COUNTER_FIB_LKUP_PASS,     ///< FIB lookup failed, full network stack assistance required
+    COUNTER_INVALID_HF,        ///< Hop field is invalid
+    COUNTER_ENUM_COUNT,        // always last
 };
 
 enum verdict {
-    VERDICT_ABORT           = MAKE_VERDICT(XDP_ABORTED,  COUNTER_UNDEFINED),
-    VERDICT_DROP            = MAKE_VERDICT(XDP_DROP,     COUNTER_UNDEFINED),
-    VERDICT_PASS            = MAKE_VERDICT(XDP_PASS,     COUNTER_UNDEFINED),
-    VERDICT_TX              = MAKE_VERDICT(XDP_TX,       COUNTER_UNDEFINED),
-    VERDICT_SCION_FORWARD   = MAKE_VERDICT(XDP_REDIRECT, COUNTER_SCION_FORWARD),
-    VERDICT_PARSE_ERROR     = MAKE_VERDICT(XDP_DROP,     COUNTER_PARSE_ERROR),
-    VERDICT_NOT_SCION       = MAKE_VERDICT(XDP_PASS,     COUNTER_NOT_SCION),
-    VERDICT_NOT_IMPLEMENTED = MAKE_VERDICT(XDP_PASS,     COUNTER_NOT_IMPLEMENTED),
-    VERDICT_NO_INTERFACE    = MAKE_VERDICT(XDP_DROP,     COUNTER_NO_INTERFACE),
-    VERDICT_ROUTER_ALERT    = MAKE_VERDICT(XDP_PASS,     COUNTER_ROUTER_ALERT),
-    VERDICT_FIB_LKUP_DROP   = MAKE_VERDICT(XDP_DROP,     COUNTER_FIB_LKUP_DROP),
-    VERDICT_FIB_LKUP_PASS   = MAKE_VERDICT(XDP_PASS,     COUNTER_FIN_LKUP_PASS),
-    VERDICT_INVALID_HF      = MAKE_VERDICT(XDP_DROP,     COUNTER_INVALID_HF),
+    VERDICT_ABORT             = MAKE_VERDICT(XDP_ABORTED,  COUNTER_UNDEFINED),
+    VERDICT_DROP              = MAKE_VERDICT(XDP_DROP,     COUNTER_UNDEFINED),
+    VERDICT_PASS              = MAKE_VERDICT(XDP_PASS,     COUNTER_UNDEFINED),
+    VERDICT_TX                = MAKE_VERDICT(XDP_TX,       COUNTER_UNDEFINED),
+    VERDICT_SCION_FORWARD     = MAKE_VERDICT(XDP_REDIRECT, COUNTER_SCION_FORWARD),
+    VERDICT_PARSE_ERROR       = MAKE_VERDICT(XDP_DROP,     COUNTER_PARSE_ERROR),
+    VERDICT_NOT_SCION         = MAKE_VERDICT(XDP_PASS,     COUNTER_NOT_SCION),
+    VERDICT_NOT_IMPLEMENTED   = MAKE_VERDICT(XDP_PASS,     COUNTER_NOT_IMPLEMENTED),
+    VERDICT_NO_INTERFACE      = MAKE_VERDICT(XDP_DROP,     COUNTER_NO_INTERFACE),
+    VERDICT_UNDERLAY_MISMATCH = MAKE_VERDICT(XDP_PASS,     COUNTER_UNDERLAY_MISMATCH),
+    VERDICT_ROUTER_ALERT      = MAKE_VERDICT(XDP_PASS,     COUNTER_ROUTER_ALERT),
+    VERDICT_FIB_LKUP_DROP     = MAKE_VERDICT(XDP_DROP,     COUNTER_FIB_LKUP_DROP),
+    VERDICT_FIB_LKUP_PASS     = MAKE_VERDICT(XDP_PASS,     COUNTER_FIB_LKUP_PASS),
+    VERDICT_INVALID_HF        = MAKE_VERDICT(XDP_DROP,     COUNTER_INVALID_HF),
 };
 
+/// \brief Key for ingress IFID lookup.
 struct ingress_addr
 {
     // Only one of ipv4 and ipv6 is allowed to be non-zero.
@@ -79,55 +83,74 @@ struct ingress_addr
     u16 ifindex; // in host byte order
 };
 
+/// \brief Expanded AES key and AES-CMAC subkey for hop field validation.
 struct hop_key
 {
     struct aes_key_schedule key;
     struct aes_block subkey;
 };
 
-struct redirect_params
+/// \brief Underlay addresses of a SCION inter-AS link.
+struct ext_link
 {
+    u32 ip_family;         // AF_INET or AF_INET6
+    union {
 #ifdef ENABLE_IPV4
-    struct {
-        u32 dst;    // in network byte order
-        u32 src;    // in network byte order
-    } ipv4;
+        struct {
+            u32 remote;    // in network byte order
+            u32 local;     // in network byte order
+        } ipv4;
 #endif
 #ifdef ENABLE_IPV6
-    struct {
-        u32 dst[4]; // in network byte order
-        u32 src[4]; // in network byte order
-    } ipv6;
+        struct {
+            u32 remote[4]; // in network byte order
+            u32 local[4];  // in network byte order
+        } ipv6;
 #endif
-    u16 dst_port;   // in network byte order
-    u16 src_port;   // in network byte order
+    };
+    u16 remote_port;       // in network byte order
+    u16 local_port;        // in network byte order
 };
 
-struct interface
+/// \brief IP address and UDP port of an AS-internal BR interface.
+struct int_iface
 {
+    u32 ip_family;   // AF_INET or AF_INET6
+    union {
 #ifdef ENABLE_IPV4
-    u32 ipv4;    // in network byte order
+        u32 ipv4;    // in network byte order
 #endif
 #ifdef ENABLE_IPV6
-    u32 ipv6[4]; // in network byte order
+        u32 ipv6[4]; // in network byte order
 #endif
-    u16 port;    // in network byte order
+    };
+    u16 port;        // in network byte order
 };
 
+/// \brief Underlay addresses for packet rewriting and redirection.
 struct fwd_info
 {
-    u32 as_egress;
+    /// Nonzero if the next hop is outside of the current AS.
+    u32 fwd_external;
+
     union {
-        struct redirect_params redirect;
-        struct interface egress_br;
+        /// Local and remote underlay addresses of the inter-AS link to the next-hop AS.
+        /// Valid if `fwd_external != 0`.
+        struct ext_link link;
+
+        /// Internal interface address of the next-hop sibling BR.
+        /// Valid if `fwd_external == 0`.
+        struct int_iface sibling;
     };
 };
 
+/// \brief Packet and byte counters of a single BR port.
 struct port_stats {
     u64 verdict_bytes[COUNTER_ENUM_COUNT];
     u64 verdict_pkts[COUNTER_ENUM_COUNT];
 };
 
+/// \brief Scratchpad memory for variables that do not fit on the stack.
 struct scratchpad
 {
     // Verdict if the last operation failed

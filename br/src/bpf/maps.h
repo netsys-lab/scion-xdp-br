@@ -45,13 +45,14 @@ struct {
     __uint(max_entries, 16);
 } egress_map SEC(".maps");
 
-/// \brief Stores the source IP address and source UDP port of the AS internal interfaces.
-/// \details The internal interfaces are identified by Linux interface index, therefore we can have
-/// only one UDP underlay connection per physical interface.
+/// \brief Stores the underlay addresses of the AS-internal interfaces.
+/// \details At the moment, only one underlay address is possible per internal interface.
+/// In consequence, every interface can either be IPv4 or IPv6, it is not possible to set both
+/// address types at the same time.
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(key_size, sizeof(u32)); // Interface index
-    __uint(value_size, sizeof(struct interface)); // Corresponding IP and UDP port
+    __uint(value_size, sizeof(struct int_iface)); // Corresponding IP and UDP port
     __uint(max_entries, 16);
 } int_iface_map SEC(".maps");
 

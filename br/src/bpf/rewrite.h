@@ -32,6 +32,13 @@
 inline void rewrite(struct scratchpad *this, struct headers *hdr, void *data_end);
 inline void rewrite_scion_path(struct scratchpad *this, struct headers *hdr, void *data_end);
 
+#define FOLD_CHECKSUM(csum) do { \
+    csum = (csum & 0xffff) + (csum >> 16); \
+    csum = (csum & 0xffff) + (csum >> 16); \
+    csum = ~csum; \
+    if (csum == 0) csum = 0xffff; \
+} while (0)
+
 
 /// \brief Write pending changes into the packet and update the checksums.
 __attribute__((__always_inline__))
@@ -52,20 +59,35 @@ inline void rewrite(struct scratchpad *this, struct headers *hdr, void *data_end
         this->ip_residual += csum;
         this->udp_residual += csum;
         this->ip_residual += (hdr->ip.v4->ttl = this->ip.v4.ttl);
+
         // Update checksum
         csum = ~hdr->ip.v4->check + this->ip_residual + 1;
-        csum = (csum & 0xffff) + (csum >> 16);
-        csum = (csum & 0xffff) + (csum >> 16);
-        csum = ~csum;
-        if (csum == 0) csum = 0xffff;
+        FOLD_CHECKSUM(csum);
         hdr->ip.v4->check = csum;
+
         break;
     }
 #endif
 #ifdef ENABLE_IPV6
     case AF_INET6:
-        // TODO
+    {
+        struct in6_addr *daddr = &hdr->ip.v6->daddr;
+        struct in6_addr *saddr = &hdr->ip.v6->saddr;
+        if ((void*)daddr + sizeof(struct in6_addr) < data_end
+            && (void*)saddr + sizeof(struct in6_addr) < data_end)
+        {
+            #pragma unroll
+            for (uint64_t i = 0; i < 4; ++i)
+            {
+                daddr->in6_u.u6_addr32[i] = this->ip.v6.dst[i];
+                this->udp_residual += this->ip.v6.dst[i];
+                saddr->in6_u.u6_addr32[i] = this->ip.v6.src[i];
+                this->udp_residual += this->ip.v6.src[i];
+            }
+        }
+        hdr->ip.v6->hop_limit = this->ip.v6.hop_limit;
         break;
+    }
 #endif
     default:
         break;
@@ -91,10 +113,7 @@ inline void rewrite(struct scratchpad *this, struct headers *hdr, void *data_end
 
     // Update UDP checksum
     u64 csum = ~hdr->udp->check + this->udp_residual + 1;
-    csum = (csum & 0xffff) + (csum >> 16);
-    csum = (csum & 0xffff) + (csum >> 16);
-    csum = ~csum;
-    if (csum == 0) csum = 0xffff;
+    FOLD_CHECKSUM(csum);
     hdr->udp->check= csum;
 }
 

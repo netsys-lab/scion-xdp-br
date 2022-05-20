@@ -88,17 +88,18 @@ void printStats(const struct port_stats &stats, const Rates &rates)
         "Not SCION",
         "Not implemented",
         "No interface",
+        "Underlay mismatch",
         "Router alert",
         "FIB lookup drop",
         "FIB lookup pass",
         "Invalid HF",
     };
 
-    std::cout << "Verdict           Packets    pkts/s         Bytes    Mbit/s\n";
+    std::cout << "Verdict             Packets    pkts/s         Bytes    Mbit/s\n";
     for (int i = 0; i < COUNTER_ENUM_COUNT; ++i)
     {
         std::cout
-            << std::left << std::setw(16) << STAT_NAMES[i]
+            << std::left << std::setw(18) << STAT_NAMES[i]
             << std::right << std::setw(8) << stats.verdict_pkts[i]
             << std::setw(11) << std::fixed << std::setprecision(0) << rates.verdict_pkts[i]
             << std::setw(14) << stats.verdict_bytes[i]

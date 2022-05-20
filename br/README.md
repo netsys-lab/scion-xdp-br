@@ -21,8 +21,12 @@ The BR configuration is a TOML file containing three keys:
 - `self`: The "name" of the border router as it appears in SCION's configuration
   (e.g, "br1-ff00_0_1-1").
 - `topology`: Path to the `topology.json` file.
-- `internal_interfaces` a list of (IP, UDP port) pair to be considered as AS internal interfaces.
+- `internal_interfaces` a list of (IP, UDP port) pairs to be considered as AS internal interfaces.
   At minimum this should contain the "internal_addr" of the BR as configured in `topology.json`.
+  Multiple IP addresses belonging to the same network interface are not supported as different
+  internal interfaces. Moreover, the internal network must be either IPv4 or IPv6, mixing the two
+  is not supported by the Go border router and consequentially is also not supported by the XDP
+  router.
 
 See [test/br_config](test/br_config) for an example.
 

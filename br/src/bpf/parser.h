@@ -18,6 +18,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#ifndef PARSER_H_GUARD
+#define PARSER_H_GUARD
+
 #include "common.h"
 #include "constants.h"
 #include "headers.h"
@@ -70,25 +73,31 @@ inline void* parse_underlay(
         if (skip > 40) return NULL;
         data += skip;
     #ifdef ENABLE_IPV6
-        memset(this->ip.v6, 0, sizeof(this->ip.v6));
+        memset(&this->ip.v6, 0, sizeof(this->ip.v6));
     #endif
         if (hdr->ip.v4->protocol != IPPROTO_UDP) return NULL;
         break;
 #endif
 #ifdef ENABLE_IPV6
     case htons(ETH_P_IPV6):
-        this->hdr.ip.v6 = data;
-        data += sizeof(*this->hdr.ip.v6);
+        hdr->ip.v6 = data;
+        data += sizeof(*hdr->ip.v6);
         if (data > data_end) return NULL;
         this->ip.family = AF_INET6;
-        memcpy(this->ip.v6.dst, &this->hdr.ip.v6->daddr, 16);
-        memcpy(this->ip.v6.src, &this->hdr.ip.v6->saddr, 16);
-        this->ip.v6.hop_limit = this->hdr.ip.v6->hop_limit;
-        // TODO: checksum residual
+        #pragma unroll
+        for (uint64_t i = 0; i < 4; ++i)
+        {
+            this->ip.v6.dst[i] = hdr->ip.v6->daddr.in6_u.u6_addr32[i];
+            this->udp_residual -= this->ip.v6.dst[i];
+            this->ip.v6.src[i] = hdr->ip.v6->saddr.in6_u.u6_addr32[i];
+            this->udp_residual -= this->ip.v6.src[i];
+        }
+        this->ip.v6.hop_limit = hdr->ip.v6->hop_limit;
     #ifdef ENABLE_IPV4
-        memset(this->ip.v4, 0, sizeof(this->ip.v4));
+        memset(&this->ip.v4, 0, sizeof(this->ip.v4));
     #endif
-        if (this->hdr.ip.v6->nexthdr != IPPROTO_UDP) return NULL;
+        if (hdr->ip.v6->nexthdr != IPPROTO_UDP) return NULL;
+        break;
 #endif
     default:
         return NULL;
@@ -194,3 +203,5 @@ inline void* parse_scion_path(
     return data;
 }
 #endif // ENABLE_SCION_PATH
+
+#endif // PARSER_H_GUARD

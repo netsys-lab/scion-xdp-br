@@ -4,8 +4,9 @@ import ptf
 import ptf.ptfutils
 import pyroute2
 from ptf.base_tests import BaseTest
-from ptf.testutils import group, send_packet
+from ptf.testutils import group, send_packet, test_param_get
 from scapy.layers.inet import IP, UDP, Ether
+from scapy.layers.inet6 import IPv6
 from scapy.packet import Raw, bind_layers
 from scapy_scion.layers.scion import SCION, HopField, InfoField, SCIONPath
 
@@ -242,11 +243,14 @@ class DirectlyAttachedTest(TestTopology1):
     def runTest(self):
         ing_ifid = 1
         egr_ifid = 2
+
         ing_enc = Ether(src="02:00:00:00:00:00", dst="02:00:00:00:00:01") \
-            / IP(src="10.1.1.1", dst="10.1.1.2") \
+            / (IP(src="10.1.1.1", dst="10.1.1.2") if not test_param_get("ipv6") else \
+               IPv6(src="fd00:f00d:cafe:1::1", dst="fd00:f00d:cafe:1::2")) \
             / UDP(sport=50000, dport=50000)
         egr_enc = Ether(src="02:00:00:00:00:03", dst="02:00:00:00:00:02") \
-            / IP(src="10.1.2.2", dst="10.1.2.1") \
+            / (IP(src="10.1.2.2", dst="10.1.2.1") if not test_param_get("ipv6") else \
+               IPv6(src="fd00:f00d:cafe:2::2", dst="fd00:f00d:cafe:2::1")) \
             / UDP(sport=50000, dport=50000)
         ing_port = (0, ing_ifid)
         egr_port = (0, egr_ifid)
@@ -266,10 +270,12 @@ class ForwardToSiblingTest(TestTopology1):
         ing_ifid = 1
         egr_ifid = 3
         ing_enc = Ether(src="02:00:00:00:00:00", dst="02:00:00:00:00:01") \
-            / IP(src="10.1.1.1", dst="10.1.1.2") \
+            / (IP(src="10.1.1.1", dst="10.1.1.2") if not test_param_get("ipv6") else \
+               IPv6(src="fd00:f00d:cafe:1::1", dst="fd00:f00d:cafe:1::2")) \
             / UDP(sport=50000, dport=50000)
         egr_enc = Ether(src="02:00:00:00:00:09", dst="02:00:00:00:00:08") \
-            / IP(src="10.1.3.2", dst="10.1.3.1") \
+            / (IP(src="10.1.3.2", dst="10.1.3.1") if not test_param_get("ipv6") else \
+               IPv6(src="fd00:f00d:cafe:3::2", dst="fd00:f00d:cafe:3::1")) \
             / UDP(sport=50000, dport=50000)
         ing_port = (0, ing_ifid)
         egr_port = (1, egr_ifid)
@@ -289,10 +295,12 @@ class IpForwardTest(TestTopology1):
         ing_ifid = 4
         egr_ifid = 6
         ing_enc = Ether(src="02:00:00:00:00:0a", dst="02:00:00:00:00:0b") \
-            / IP(src="10.1.4.1", dst="10.1.4.2") \
+            / (IP(src="10.1.4.1", dst="10.1.4.2") if not test_param_get("ipv6") else \
+               IPv6(src="fd00:f00d:cafe:4::1", dst="fd00:f00d:cafe:4::2")) \
             / UDP(sport=50000, dport=50000)
         egr_enc = Ether(src="02:00:00:00:00:0f", dst="02:00:00:00:00:0e") \
-            / IP(src="10.1.6.2", dst="10.1.6.1") \
+            / (IP(src="10.1.6.2", dst="10.1.6.1") if not test_param_get("ipv6") else \
+               IPv6(src="fd00:f00d:cafe:6::2", dst="fd00:f00d:cafe:6::1")) \
             / UDP(sport=50000, dport=50000)
         ing_port = (1, ing_ifid)
         egr_port = (2, egr_ifid)

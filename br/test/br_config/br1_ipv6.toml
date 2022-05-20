@@ -1,0 +1,6 @@
+self = "br1-ff00_0_1-1"
+topology = "br_config/topology6.json"
+internal_interfaces = [
+    {ip = "fd00:f00d:cafe:0::1", port = 31002},
+    {ip = "fd00:f00d:cafe:0::3", port = 31002}
+]
