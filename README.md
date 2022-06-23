@@ -5,6 +5,8 @@ This repository contains a BPF XDP application intended to accelerate the refere
 [SCION](https://github.com/scionproto/scion) border router by forwarding some common packet types
 directly in XDP.
 
+[A more up to date development version is available at https://github.com/lschulz/bpf-experiments]
+
 ### Overview
 - [/aes](/aes) Implementation of AES-CMAC for use in XDP as required by SCION.
 - [/br](/br) The SCION XDP border router.
